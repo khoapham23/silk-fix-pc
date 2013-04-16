@@ -1,0 +1,53 @@
+CC=gcc
+INCLUDE= -I. -I../interface/ -I../src_FIX/ -I../src_SigProc_FIX/ -I../../celt/libcelt/
+CFLAGS = -std=c99 -c -g -Wall -pg
+CONFIG= -DFIXED_POINT
+LIBS=-lm
+
+OBJECTS =SKP_Silk_CNG.o \
+	 SKP_Silk_code_signs.o \
+	 SKP_Silk_create_init_destroy.o \
+	 SKP_Silk_decode_core.o \
+	 SKP_Silk_decode_frame.o \
+	 SKP_Silk_decode_parameters.o \
+	 SKP_Silk_decode_indices.o \
+	 SKP_Silk_decode_pulses.o \
+	 SKP_Silk_decoder_set_fs.o \
+	 SKP_Silk_dec_API.o \
+	 SKP_Silk_enc_API.o \
+	 SKP_Silk_encode_indices.o \
+	 SKP_Silk_encode_pulses.o \
+	 SKP_Silk_gain_quant.o \
+	 SKP_Silk_interpolate.o \
+	 SKP_Silk_LBRR_embed.o \
+	 SKP_Silk_LP_variable_cutoff.o \
+	 SKP_Silk_NLSF2A_stable.o \
+	 SKP_Silk_NLSF_decode.o  \
+	 SKP_Silk_NSQ.o \
+	 SKP_Silk_NSQ_del_dec.o  \
+	 SKP_Silk_PLC.o \
+	 SKP_Silk_shell_coder.o \
+	 SKP_Silk_tables_gain.o \
+	 SKP_Silk_tables_LTP.o \
+	 SKP_Silk_tables_NLSF_CB_NB_MB.o \
+	 SKP_Silk_tables_NLSF_CB_WB.o \
+	 SKP_Silk_tables_other.o \
+	 SKP_Silk_tables_pitch_lag.o \
+	 SKP_Silk_tables_pulses_per_block.o \
+	 SKP_Silk_VAD.o \
+	 SKP_Silk_control_audio_bandwidth.o \
+	 SKP_Silk_quant_LTP_gains.o \
+	 SKP_Silk_VQ_WMat_EC.o \
+	 SKP_Silk_HP_variable_cutoff.o \
+	 SKP_Silk_NLSF_encode.o \
+	 SKP_Silk_NLSF_VQ.o \
+	 SKP_Silk_NLSF_unpack.o \
+	 SKP_Silk_NLSF_del_dec_quant.o \
+	 SKP_Silk_process_NLSFs.o \
+all: $(OBJECTS)
+	mv $(OBJECTS) ../source
+%.o: %.c 
+	$(CC) $(CFLAGS) $(CONFIG)  $(INCLUDE) $(LIBS)  $< -o  $@ 
+
+clean:
+	rm *.o 

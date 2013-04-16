@@ -1,0 +1,244 @@
+/***********************************************************************
+Copyright (c) 2006-2011, Skype Limited. All rights reserved. 
+Redistribution and use in source and binary forms, with or without 
+modification, (subject to the limitations in the disclaimer below) 
+are permitted provided that the following conditions are met:
+- Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright 
+notice, this list of conditions and the following disclaimer in the 
+documentation and/or other materials provided with the distribution.
+- Neither the name of Skype Limited, nor the names of specific 
+contributors, may be used to endorse or promote products derived from 
+this software without specific prior written permission.
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED 
+BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND 
+CONTRIBUTORS ''AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
+COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF 
+USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON 
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+***********************************************************************/
+
+
+/*****************************/
+/* Silk decoder test program */
+/*****************************/
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "SKP_Silk_SDK_API.h"
+#include "../src_SigProc_FIX/SKP_Silk_SigProc_FIX.h"
+
+/* Define codec specific settings should be moved to h file */
+#define MAX_BYTES_PER_FRAME     1024
+#define MAX_INPUT_FRAMES        5
+#define MAX_FRAME_LENGTH        480
+#define MAX_FRAME_LENGTH_MS     20
+#define MAX_API_FS_KHZ          48
+#define MAX_LBRR_DELAY          0
+
+
+
+static void print_usage(char* argv[]) {
+    printf( "\nusage: %s in.bit out.pcm [settings]\n", argv[ 0 ] );
+    printf( "\nin.bit       : Bitstream input to decoder" );
+    printf( "\nout.pcm      : Speech output from decoder" );
+    printf( "\n   settings:" );
+    printf( "\n-Fs_API <Hz>       : Sampling rate of output signal in Hz (default: 48000) " );
+    printf( "\n-Fs_Internal <Hz>  : Internal sampling rate in Hz, default (default: 16000)" );
+    printf( "\n-plength <ms> : Packet interval in ms, (default: 20)" );
+    printf( "\n" );
+}
+
+
+
+int main( int argc, char* argv[] )
+{
+    double    filetime;
+    size_t    counter;
+    SKP_int32 args, totPackets, i, ret, len, tot_len, nBytes;
+    SKP_uint8 payload[    MAX_BYTES_PER_FRAME * MAX_INPUT_FRAMES * ( MAX_LBRR_DELAY + 1 ) ];
+    SKP_uint8 *payloadEnd = NULL, *payloadToDec = NULL;
+
+ //   SKP_uint8 *payloadPtr;
+    SKP_int16 nBytesPerPacket[ MAX_LBRR_DELAY + 1 ], totBytes;
+    SKP_int16 out[ ( ( MAX_FRAME_LENGTH_MS * MAX_API_FS_KHZ ) << 1 ) * MAX_INPUT_FRAMES ], *outPtr;
+    char      speechOutFileName[ 150 ], bitInFileName[ 150 ];
+    FILE      *bitInFile, *speechOutFile;
+    SKP_int32 API_Fs_Hz = 0, packetSize_ms=0;
+    SKP_int32 decSizeBytes;
+    void      *psDec;
+
+   // float     loss_prob;
+    SKP_int32 frames, quiet;
+    SKP_SILK_SDK_DecControlStruct DecControl;
+    ec_dec         range_dec_celt_state;
+
+    if( argc < 3 ) {
+        print_usage( argv );
+        exit( 0 );
+    } 
+
+    /* default settings */
+    quiet     = 0;
+  //  loss_prob = 0.0f;
+    DecControl.internalSampleRate=16000;
+    DecControl.payloadSize_ms=20;
+
+    /* get arguments */
+    args = 1;
+    strcpy( bitInFileName, argv[ args ] );
+    args++;
+    strcpy( speechOutFileName, argv[ args ] );
+    args++;
+    while( args < argc ) {
+         if( SKP_STR_CASEINSENSITIVE_COMPARE( argv[ args ], "-Fs_API" ) == 0 ) {
+            sscanf( argv[ args + 1 ], "%d", &API_Fs_Hz );
+            args += 2;
+        } else if( SKP_STR_CASEINSENSITIVE_COMPARE( argv[ args ], "-Fs_Internal" ) == 0 ) {
+            sscanf( argv[ args + 1 ], "%d", &DecControl.internalSampleRate );
+            args += 2;
+        } else if( SKP_STR_CASEINSENSITIVE_COMPARE( argv[ args ], "-plength" ) == 0 ) {
+            sscanf( argv[ args + 1 ], "%d", &DecControl.payloadSize_ms );
+            args += 2;
+        } else if( SKP_STR_CASEINSENSITIVE_COMPARE( argv[ args ], "-quiet" ) == 0 ) {
+            quiet = 1;
+            args++;
+        } else {
+            printf( "Error: unrecognized setting: %s\n\n", argv[ args ] );
+            print_usage( argv );
+            exit( 0 );
+        }
+    }
+
+    if( !quiet ) {
+        printf("******************* Compiled for %d bit cpu ********* \n", (int)sizeof(void*) * 8 );
+        printf( "Input:                       %s\n", bitInFileName );
+        printf( "Output:                      %s\n", speechOutFileName );
+    }
+
+    /* Open files */
+    bitInFile = fopen( bitInFileName, "rb" );
+    if( bitInFile == NULL ) {
+        printf( "Error: could not open input file %s\n", bitInFileName );
+        exit( 0 );
+    } 
+    speechOutFile = fopen( speechOutFileName, "wb" );
+    if( speechOutFile == NULL ) {
+        printf( "Error: could not open output file %s\n", speechOutFileName );
+        exit( 0 );
+    }
+
+    /* Set the samplingrate that is requested for the output */
+    if( API_Fs_Hz == 0 ) {
+        DecControl.API_sampleRate = 48000;
+    } else {
+        DecControl.API_sampleRate = API_Fs_Hz;
+    }
+
+    /* Create decoder */
+    ret = SKP_Silk_SDK_Get_Decoder_Size( &decSizeBytes );
+    if( ret ) {
+        printf( "\nSKP_Silk_SDK_Get_Decoder_Size returned %d", ret );
+    }
+    psDec = malloc( decSizeBytes );
+
+    /* Reset decoder */
+    ret = SKP_Silk_SDK_InitDecoder( psDec );
+    if( ret ) {
+        printf( "\nSKP_Silk_InitDecoder returned %d", ret );
+    }
+
+    totPackets = 0;
+    payloadEnd = payload;
+
+    while( 1 ) {
+        /* Read payload size */
+        counter = fread( &nBytes, sizeof( SKP_int32 ), 1, bitInFile );
+        if( nBytes < 0 || counter < 1 ) {
+            break;
+        }
+        
+        /* Read payload */
+        counter = fread( payloadEnd, sizeof( SKP_uint8 ), nBytes, bitInFile );
+        if( ( SKP_int16 )counter < nBytes ) {
+            break;
+        }
+
+        /* Initialize range decoder state */
+        ec_dec_init( &range_dec_celt_state, payloadEnd, nBytes );
+
+
+        nBytesPerPacket[ MAX_LBRR_DELAY ] = nBytes;
+        payloadEnd                       += nBytes;
+        {
+            nBytes = nBytesPerPacket[ 0 ];
+            payloadToDec = payload;
+        }
+
+        /* Silk decoder */
+        outPtr = out;
+        tot_len = 0;
+        {
+            /* No Loss: Decode all frames in the packet */
+            frames = 0;
+            do {
+                /* Decode 20 ms */
+                ret = SKP_Silk_SDK_Decode( psDec, &DecControl, 0, frames == 0, &range_dec_celt_state, nBytes, outPtr, &len );
+                if( ret ) {
+                    printf( "\nSKP_Silk_SDK_Decode returned %d", ret );
+                }
+                frames++;
+                outPtr  += len;
+                tot_len += len;
+                if( frames > MAX_INPUT_FRAMES ) {
+                    /* Hack for corrupt stream that could generate too many frames */
+                    outPtr  = out;
+                    tot_len = 0;
+                    frames  = 0;
+                }
+                /* Until last 20 ms frame of packet has been decoded */
+            } while( frames < DecControl.framesPerPayload ); 
+        }
+        totPackets++;
+        packetSize_ms = tot_len / ( DecControl.API_sampleRate / 1000 );
+
+        /* Write output to file */
+
+        fwrite( out, sizeof( SKP_int16 ), tot_len, speechOutFile );
+
+        /* Update buffer */
+        totBytes = 0;
+        for( i = 0; i < MAX_LBRR_DELAY; i++ ) {
+            totBytes += nBytesPerPacket[ i + 1 ];
+        }
+        SKP_memmove( payload, &payload[ nBytesPerPacket[ 0 ] ], totBytes * sizeof( SKP_uint8 ) );
+        payloadEnd -= nBytesPerPacket[ 0 ];
+        SKP_memmove( nBytesPerPacket, &nBytesPerPacket[ 1 ], MAX_LBRR_DELAY * sizeof( SKP_int16 ) );
+    }
+    ///////////the end of loop////////////////
+
+    filetime = totPackets * 1e-3 * packetSize_ms;
+    if( !quiet ) {
+        printf("\nFile length:                 %.3f s\n", filetime);
+        fprintf( stderr, "\rPackets decoded:              %d", totPackets );
+        printf("\n\n");
+    }
+
+    /* Free decoder */
+    free( psDec );
+
+    /* Close files */
+    fclose( speechOutFile );
+    fclose( bitInFile );
+
+    return 0;
+}

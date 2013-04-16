@@ -1,0 +1,51 @@
+# our first makefile - version 3
+#-------------------------------
+IDIR =./source
+CFLAGS = -g -Wall -pg 
+#LDFLAGS=-L/home/pham/Downloads/opus/celt-standard/libcelt/.libs /home/pham/Downloads/opus/celt-standard/libcelt/.libs/*.o -L/home/pham/Downloads/libogg-1.3.0/src/.libs /home/pham/Downloads/libogg-1.3.0/src/.libs/*.o /home/pham/Downloads/opus/celt-standard/tools/wav_io.o
+#OBJECTS= celt_enc.o celt.o bands.o cwrs.o entcode.o entdec.o entenc.o kissfft.o mathops.o mdct.o modes.o pitch.o plc.o 
+
+PROG= encoder decoder signalcompare
+LIBS= ../source/silklib.a ../../celt/libcelt/.libs/libcelt0.a -lm
+CONFIG= -DHAVE_CONFIG_H
+
+
+CC=gcc
+#INCLUDE= -I../src_common/ -I../interface/ -I../../celt/libcelt/
+INCLUDE= -I. -I../interface/ -I../src_FIX/ -I../src_SigProc_FIX/ -I../../celt/libcelt/ -I../src_common/
+
+all:$(PROG)
+	@true
+	
+encoder.o:	Encoder.c 
+	$(CC) -c $(CFLAGS) $(INCLUDE) Encoder.c -o encoder.o
+		
+encoder:		encoder.o 
+	$(CC) $(CFLAGS)  encoder.o $(LIBS)  -o encoder
+
+decoder.o:	Decoder.c
+	$(CC) -c $(CFLAGS) $(INCLUDE) Decoder.c -o decoder.o
+	
+decoder:		decoder.o 
+	$(CC) $(CFLAGS)  decoder.o $(LIBS)  -o decoder
+
+signalcompare.o:signalcompare.c
+	$(CC) -c $(CFLAGS) $(INCLUDE) signalcompare.c -o signalcompare.o
+signalcompare:	signalcompare.o
+	$(CC) $(CFLAGS)  signalcompare.o $(LIBS)  -o signalcompare
+
+
+#celt_dec_f:	celt_dec_f.o	
+#	$(CC) -pg -g $(LDFLAGS) $(LIBS) celt_dec_f.o -pg -o celt_dec_f
+#celt_enc_f.o:	celt_enc_f.c
+#	$(CC) $(CFLAGS) $(INCLUDE) celt_enc_f.c -o celt_enc_f.o	
+#testcelt.o:	testcelt.c
+#	$(CC) $(CFLAGS) $(INCLUDE) testcelt.c -o testcelt.o
+#testcelt:	testcelt.o
+#	$(CC) -pg -g  $(LDFLAGS) $(LIBS) testcelt.o -o testcelt	
+	
+clean:
+	rm *.o 
+	rm -f $(PROG)
+	
+	
